@@ -1,20 +1,66 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { ArticleWithCommands } from '@/types/database';
 import { ArticleCard } from '@/components/ArticleCard';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, X, Tag, Filter } from 'lucide-react';
+import { Search, X, Tag, Filter, Loader2, Sparkles } from 'lucide-react';
+import { expandSemanticQuery } from '@/app/actions/semanticSearch';
 
 interface ArticleSearchListProps {
   articles: ArticleWithCommands[];
 }
 
+function matchesTerm(searchableText: string, term: string): boolean {
+  if (term === 'java') {
+    // Explicit word boundary check for "java" so it does not match "javascript"
+    return /\bjava\b/i.test(searchableText);
+  }
+  return searchableText.includes(term);
+}
+
 export function ArticleSearchList({ articles }: ArticleSearchListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [semanticKeywords, setSemanticKeywords] = useState<string[]>([]);
+  const [intentExplanation, setIntentExplanation] = useState('');
+  const [isExpanding, setIsExpanding] = useState(false);
+  const requestIdRef = useRef(0);
+
+  // Debounce natural language query expansion via AI (synonyms/related terms).
+  // Query changes only ever originate from handleSearchChange below, which
+  // already resets keywords/explanation/isExpanding synchronously, so this
+  // effect only needs to handle the non-empty "schedule expansion" case.
+  useEffect(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      requestIdRef.current += 1;
+      return;
+    }
+
+    const currentId = ++requestIdRef.current;
+
+    const timer = setTimeout(async () => {
+      const res = await expandSemanticQuery(trimmed);
+      if (requestIdRef.current !== currentId) return; // stale response, ignore
+      setSemanticKeywords(res.keywords || []);
+      setIntentExplanation(res.intentExplanation || '');
+      setIsExpanding(false);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value);
+    // Clear stale expansion results immediately so filtering falls back to
+    // raw-term matching until the new AI expansion resolves.
+    setSemanticKeywords([]);
+    setIntentExplanation('');
+    setIsExpanding(value.trim() !== '');
+  };
 
   // Extract all unique tags and count frequencies
   const tagCounts = useMemo(() => {
@@ -29,40 +75,52 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
     return Object.entries(counts).sort((a, b) => b[1] - a[1]);
   }, [articles]);
 
-  // Filter articles based on search query and selected tag
+  // Filter + rank articles based on natural language search query and selected tag
   const filteredArticles = useMemo(() => {
-    return articles.filter((article) => {
-      // 1. Tag filter
+    const trimmed = searchQuery.trim();
+
+    const withTagFilter = articles.filter((article) => {
       if (selectedTag && !article.tags?.includes(selectedTag)) {
         return false;
       }
-
-      // 2. Keyword/Natural language filter
-      if (!searchQuery.trim()) return true;
-
-      const terms = searchQuery.toLowerCase().trim().split(/\s+/);
-
-      // Collect all searchable text from article
-      const searchableText = [
-        article.title,
-        ...(article.summary || []),
-        ...(article.use_cases || []),
-        ...(article.tags || []),
-        ...(article.commands?.map((c) => `${c.command} ${c.description}`) || []),
-      ]
-        .join(' ')
-        .toLowerCase();
-
-      // Ensure all search terms match somewhere in the article content
-      return terms.every((term) => {
-        if (term === 'java') {
-          // Explicit word boundary check for "java" so it does not match "javascript"
-          return /\bjava\b/i.test(searchableText);
-        }
-        return searchableText.includes(term);
-      });
+      return true;
     });
-  }, [articles, searchQuery, selectedTag]);
+
+    if (!trimmed) return withTagFilter;
+
+    const rawTerms = trimmed.toLowerCase().split(/\s+/).filter(Boolean);
+    const matchTerms = Array.from(
+      new Set([...rawTerms, ...semanticKeywords.map((k) => k.toLowerCase())])
+    );
+
+    const scored = withTagFilter
+      .map((article) => {
+        const searchableText = [
+          article.title,
+          ...(article.summary || []),
+          ...(article.use_cases || []),
+          ...(article.tags || []),
+          ...(article.commands?.map((c) => `${c.command} ${c.description}`) || []),
+        ]
+          .join(' ')
+          .toLowerCase();
+
+        let score = 0;
+        matchTerms.forEach((term) => {
+          if (matchesTerm(searchableText, term)) {
+            // Raw query terms count for more than AI-expanded synonyms
+            score += rawTerms.includes(term) ? 2 : 1;
+          }
+        });
+
+        return { article, score };
+      })
+      .filter(({ score }) => score > 0);
+
+    scored.sort((a, b) => b.score - a.score);
+
+    return scored.map(({ article }) => article);
+  }, [articles, searchQuery, selectedTag, semanticKeywords]);
 
   const handleTagClick = (tag: string) => {
     if (selectedTag === tag) {
@@ -73,7 +131,7 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
   };
 
   const handleClearFilters = () => {
-    setSearchQuery('');
+    handleSearchChange('');
     setSelectedTag(null);
   };
 
@@ -89,19 +147,23 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
             <Input
               type="text"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="キーワードや技術名・要約内容で検索..."
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="自然言語で検索（例: シェルスクリプトの1行目って何？）"
               className="pl-9 pr-9 text-sm"
             />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                aria-label="検索キーワードをクリア"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            {isExpanding ? (
+              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground animate-spin" />
+            ) : (
+              searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => handleSearchChange('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="検索キーワードをクリア"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )
             )}
           </div>
 
@@ -117,6 +179,21 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
             </Button>
           )}
         </div>
+
+        {/* AI Query Interpretation */}
+        {searchQuery.trim() && (intentExplanation || semanticKeywords.length > 0) && (
+          <div className="flex flex-wrap items-center gap-1.5 text-xs pt-1">
+            <Sparkles className="w-3.5 h-3.5 text-primary shrink-0" />
+            {intentExplanation && (
+              <span className="text-muted-foreground">{intentExplanation}</span>
+            )}
+            {semanticKeywords.slice(0, 6).map((kw) => (
+              <Badge key={kw} variant="outline" className="text-[10px] px-1.5 py-0 bg-background">
+                {kw}
+              </Badge>
+            ))}
+          </div>
+        )}
 
         {/* Dynamic Tag Filter Bar */}
         {tagCounts.length > 0 && (
