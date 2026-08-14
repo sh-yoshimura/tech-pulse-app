@@ -6,7 +6,7 @@ import { ArticleCard } from '@/components/ArticleCard';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, X, Tag, Filter, Loader2, Sparkles, Trash2 } from 'lucide-react';
+import { Search, X, Tag, Filter, Loader2, Sparkles, Trash2, CheckSquare, Square } from 'lucide-react';
 import { expandSemanticQuery } from '@/app/actions/semanticSearch';
 import { deleteArticles } from '@/app/actions/deleteArticle';
 
@@ -147,6 +147,23 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
   };
 
   const handleClearSelection = () => setSelectedIds(new Set());
+
+  // Selecting "all" only ever applies to the currently filtered/visible
+  // articles, not the full unfiltered list.
+  const isAllFilteredSelected =
+    filteredArticles.length > 0 && filteredArticles.every((a) => selectedIds.has(a.id));
+
+  const handleToggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (isAllFilteredSelected) {
+        filteredArticles.forEach((a) => next.delete(a.id));
+      } else {
+        filteredArticles.forEach((a) => next.add(a.id));
+      }
+      return next;
+    });
+  };
 
   const runDelete = async (ids: string[]) => {
     setDeleteError(null);
@@ -291,12 +308,28 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
 
       {/* List Header and Counter */}
       <div className="flex flex-wrap justify-between items-center gap-2 px-1">
-        <h2 className="text-lg font-bold flex items-center gap-2">
-          <span>ストック一覧</span>
-          <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-            {filteredArticles.length} / {articles.length} 件
-          </span>
-        </h2>
+        <div className="flex items-center gap-3">
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            <span>ストック一覧</span>
+            <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+              {filteredArticles.length} / {articles.length} 件
+            </span>
+          </h2>
+          {filteredArticles.length > 0 && (
+            <button
+              type="button"
+              onClick={handleToggleSelectAll}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {isAllFilteredSelected ? (
+                <CheckSquare className="w-4 h-4 text-primary" />
+              ) : (
+                <Square className="w-4 h-4" />
+              )}
+              {hasActiveFilter ? '絞り込み結果をすべて選択' : 'すべて選択'}
+            </button>
+          )}
+        </div>
         <div className="flex items-center gap-2">
           {hasActiveFilter && (
             <span className="text-xs text-muted-foreground">
