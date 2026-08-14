@@ -1,7 +1,10 @@
+'use client';
+
+import { useState } from 'react';
 import { ArticleWithCommands } from '@/types/database';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckSquare, Square, Trash2, Loader2 } from 'lucide-react';
+import { CheckSquare, Square, Trash2, Loader2, Globe } from 'lucide-react';
 
 interface ArticleCardProps {
   article: ArticleWithCommands;
@@ -11,6 +14,37 @@ interface ArticleCardProps {
   onToggleSelect?: (id: string) => void;
   onDelete?: (id: string) => void;
   isDeleting?: boolean;
+}
+
+function SiteFavicon({ url }: { url: string }) {
+  const [failed, setFailed] = useState(false);
+
+  let hostname: string | null = null;
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    hostname = null;
+  }
+
+  if (!hostname || failed) {
+    return (
+      <div className="w-5 h-5 rounded flex items-center justify-center bg-muted shrink-0 mt-0.5">
+        <Globe className="w-3 h-3 text-muted-foreground" />
+      </div>
+    );
+  }
+
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://www.google.com/s2/favicons?sz=64&domain=${hostname}`}
+      alt=""
+      width={20}
+      height={20}
+      className="w-5 h-5 rounded shrink-0 mt-0.5"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 export function ArticleCard({
@@ -49,8 +83,9 @@ export function ArticleCard({
               href={article.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline min-w-0"
+              className="hover:underline min-w-0 flex items-start gap-2"
             >
+              <SiteFavicon url={article.url} />
               <CardTitle className="text-xl font-bold text-primary">
                 {article.title}
               </CardTitle>
