@@ -6,8 +6,9 @@ import { ArticleCard } from '@/components/ArticleCard';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Search, X, Tag, Filter, Loader2, Sparkles } from 'lucide-react';
+import { Search, X, Tag, Filter, Loader2, Sparkles, Trash2 } from 'lucide-react';
 import { expandSemanticQuery } from '@/app/actions/semanticSearch';
+import { deleteArticles } from '@/app/actions/deleteArticle';
 
 interface ArticleSearchListProps {
   articles: ArticleWithCommands[];
@@ -28,6 +29,9 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
   const [intentExplanation, setIntentExplanation] = useState('');
   const [isExpanding, setIsExpanding] = useState(false);
   const requestIdRef = useRef(0);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Debounce natural language query expansion via AI (synonyms/related terms).
   // Query changes only ever originate from handleSearchChange below, which
@@ -128,6 +132,59 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
     } else {
       setSelectedTag(tag);
     }
+  };
+
+  const handleToggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => setSelectedIds(new Set());
+
+  const runDelete = async (ids: string[]) => {
+    setDeleteError(null);
+    setDeletingIds((prev) => new Set([...prev, ...ids]));
+
+    const res = await deleteArticles(ids);
+
+    if (!res.success) {
+      setDeleteError(res.error || '削除に失敗しました');
+    } else {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        ids.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+
+    setDeletingIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => next.delete(id));
+      return next;
+    });
+  };
+
+  const handleDeleteOne = (id: string, title: string) => {
+    if (!window.confirm(`「${title}」を削除しますか？この操作は取り消せません。`)) return;
+    runDelete([id]);
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    if (
+      !window.confirm(
+        `選択した${selectedIds.size}件の記事を削除しますか？この操作は取り消せません。`
+      )
+    )
+      return;
+    runDelete(Array.from(selectedIds));
   };
 
   const handleClearFilters = () => {
@@ -233,19 +290,52 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
       </div>
 
       {/* List Header and Counter */}
-      <div className="flex justify-between items-center px-1">
+      <div className="flex flex-wrap justify-between items-center gap-2 px-1">
         <h2 className="text-lg font-bold flex items-center gap-2">
           <span>ストック一覧</span>
           <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
             {filteredArticles.length} / {articles.length} 件
           </span>
         </h2>
-        {hasActiveFilter && (
-          <span className="text-xs text-muted-foreground">
-            絞り込み適用中
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {hasActiveFilter && (
+            <span className="text-xs text-muted-foreground">
+              絞り込み適用中
+            </span>
+          )}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">
+                {selectedIds.size}件選択中
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleClearSelection}
+                className="h-7 text-xs px-2.5"
+              >
+                選択解除
+              </Button>
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={handleDeleteSelected}
+                disabled={deletingIds.size > 0}
+                className="h-7 text-xs px-2.5 gap-1"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                選択した記事を削除
+              </Button>
+            </div>
+          )}
+        </div>
       </div>
+
+      {deleteError && (
+        <p className="text-xs text-destructive font-medium bg-destructive/10 p-2.5 rounded-lg">
+          {deleteError}
+        </p>
+      )}
 
       {/* Articles List or Empty State */}
       {filteredArticles.length === 0 ? (
@@ -275,6 +365,10 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
               article={article}
               activeTag={selectedTag}
               onSelectTag={handleTagClick}
+              selected={selectedIds.has(article.id)}
+              onToggleSelect={handleToggleSelect}
+              onDelete={() => handleDeleteOne(article.id, article.title)}
+              isDeleting={deletingIds.has(article.id)}
             />
           ))}
         </div>

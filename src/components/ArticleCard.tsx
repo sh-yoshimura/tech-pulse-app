@@ -1,28 +1,76 @@
 import { ArticleWithCommands } from '@/types/database';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { CheckSquare, Square, Trash2, Loader2 } from 'lucide-react';
 
 interface ArticleCardProps {
   article: ArticleWithCommands;
   onSelectTag?: (tag: string) => void;
   activeTag?: string | null;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
+  onDelete?: (id: string) => void;
+  isDeleting?: boolean;
 }
 
-export function ArticleCard({ article, onSelectTag, activeTag }: ArticleCardProps) {
+export function ArticleCard({
+  article,
+  onSelectTag,
+  activeTag,
+  selected = false,
+  onToggleSelect,
+  onDelete,
+  isDeleting = false,
+}: ArticleCardProps) {
   return (
-    <Card className="w-full mb-4 hover:shadow-md transition-shadow">
+    <Card
+      className={`w-full mb-4 transition-shadow ${
+        isDeleting ? 'opacity-50 pointer-events-none' : 'hover:shadow-md'
+      } ${selected ? 'ring-1 ring-primary/50 border-primary/40' : ''}`}
+    >
       <CardHeader className="pb-2">
         <div className="flex justify-between items-start gap-4">
-          <a
-            href={article.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:underline"
-          >
-            <CardTitle className="text-xl font-bold text-primary">
-              {article.title}
-            </CardTitle>
-          </a>
+          <div className="flex items-start gap-2 min-w-0">
+            {onToggleSelect && (
+              <button
+                type="button"
+                onClick={() => onToggleSelect(article.id)}
+                aria-label={selected ? '選択を解除' : '選択する'}
+                className="mt-1 text-muted-foreground hover:text-primary transition-colors shrink-0"
+              >
+                {selected ? (
+                  <CheckSquare className="w-4 h-4 text-primary" />
+                ) : (
+                  <Square className="w-4 h-4" />
+                )}
+              </button>
+            )}
+            <a
+              href={article.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline min-w-0"
+            >
+              <CardTitle className="text-xl font-bold text-primary">
+                {article.title}
+              </CardTitle>
+            </a>
+          </div>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(article.id)}
+              disabled={isDeleting}
+              aria-label="この記事を削除"
+              className="text-muted-foreground hover:text-destructive transition-colors shrink-0 p-1 rounded-md disabled:cursor-not-allowed"
+            >
+              {isDeleting ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {article.tags.map((tag, idx) => {
