@@ -15,10 +15,12 @@ interface ArticleSearchListProps {
 }
 
 function matchesTerm(searchableText: string, term: string): boolean {
+  {/*
   if (term === 'java') {
     // Explicit word boundary check for "java" so it does not match "javascript"
     return /\bjava\b/i.test(searchableText);
   }
+    */}
   return searchableText.includes(term);
 }
 
@@ -222,7 +224,7 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
               type="text"
               value={searchQuery}
               onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="自然言語で検索（例: シェルスクリプトの1行目って何？）"
+              placeholder="登録済み記事を検索（タイトル・要約・タグ・コマンドなど）"
               className="pl-9 pr-9 text-sm"
             />
             {isExpanding ? (
@@ -310,7 +312,7 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
       <div className="flex flex-wrap justify-between items-center gap-2 px-1">
         <div className="flex items-center gap-3">
           <h2 className="text-lg font-bold flex items-center gap-2">
-            <span>ストック一覧</span>
+            <span>ストックリスト</span>
             <span className="text-xs font-normal text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
               {filteredArticles.length} / {articles.length} 件
             </span>

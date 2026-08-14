@@ -121,7 +121,7 @@ export function UrlInputForm() {
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              placeholder="https://qiita.com/... や Zenn の技術記事URLを入力"
+              placeholder="URLを入力してください"
               type="url"
               disabled={loading}
               required
@@ -131,7 +131,7 @@ export function UrlInputForm() {
               {loading ? (
                 <>
                   <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" />
-                  AI解析中...
+                  解析中...
                 </>
               ) : (
                 '解析・登録'
@@ -144,7 +144,7 @@ export function UrlInputForm() {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="例: Spring BootでDockerイメージを小さくビルドする方法"
+              placeholder="〇〇の使い方、〇〇の概要を知りたい など自然言語で検索"
               type="text"
               disabled={isSearching}
               required

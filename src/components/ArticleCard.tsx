@@ -141,7 +141,7 @@ export function ArticleCard({
             </ul>
           </div>
         )}
-
+{/*
         {article.use_cases.length > 0 && (
           <div>
             <h4 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">
@@ -177,6 +177,7 @@ export function ArticleCard({
             </div>
           </div>
         )}
+  */}
       </CardContent>
     </Card>
   );

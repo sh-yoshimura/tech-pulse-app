@@ -146,7 +146,7 @@ export function ArticleSearchModal({
                       {isRegistering ? (
                         <>
                           <Loader2 className="w-3 h-3 animate-spin mr-1" />
-                          AI解析・保存中...
+                          解析・保存中...
                         </>
                       ) : (
                         '解析・登録'

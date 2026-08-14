@@ -22,6 +22,7 @@ export default async function HomePage() {
 
     return (
         <main className="min-h-screen bg-background py-10 px-4 max-w-4xl mx-auto">
+            {/*
             <header className="text-center mb-8">
                 <h1 className="text-3xl font-extrabold tracking-tight">
                     TechPulse Dashboard
@@ -30,7 +31,7 @@ export default async function HomePage() {
                     技術記事の要約・参照シーン・主要コードをナレッジとして自動整理
                 </p>
             </header>
-
+            */}
             <UrlInputForm />
 
             <ArticleSearchList articles={articleList} />
