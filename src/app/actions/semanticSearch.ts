@@ -1,10 +1,20 @@
 'use server';
 
 import OpenAI from 'openai';
+import { AppError, toClientMessage } from '@/lib/errors';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Keeps a single pathological input from ballooning OpenAI cost/latency;
+// there's no auth or rate limiting in front of this action.
+const MAX_QUERY_LENGTH = 500;
+
+interface SemanticExpansion {
+  keywords?: string[];
+  intentExplanation?: string;
+}
 
 export async function expandSemanticQuery(userQuery: string): Promise<{
   success: boolean;
@@ -15,6 +25,10 @@ export async function expandSemanticQuery(userQuery: string): Promise<{
   try {
     if (!userQuery.trim()) {
       return { success: true, keywords: [] };
+    }
+
+    if (userQuery.length > MAX_QUERY_LENGTH) {
+      throw new AppError('検索キーワードが長すぎます');
     }
 
     const aiResponse = await openai.chat.completions.create({
@@ -52,18 +66,25 @@ export async function expandSemanticQuery(userQuery: string): Promise<{
       return { success: true, keywords: [userQuery] };
     }
 
-    const parsed = JSON.parse(content);
+    let parsed: SemanticExpansion;
+    try {
+      parsed = JSON.parse(content);
+    } catch (parseError) {
+      console.error('expandSemanticQuery JSON parse error:', parseError, content);
+      return { success: true, keywords: [userQuery] };
+    }
+
     return {
       success: true,
       keywords: parsed.keywords || [userQuery],
       intentExplanation: parsed.intentExplanation || '',
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('expandSemanticQuery Error:', error);
     return {
       success: false,
       keywords: [userQuery],
-      error: error.message,
+      error: toClientMessage(error, 'キーワード展開中にエラーが発生しました'),
     };
   }
 }

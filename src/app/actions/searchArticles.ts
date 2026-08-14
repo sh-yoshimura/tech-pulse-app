@@ -1,10 +1,16 @@
 'use server';
 
 import OpenAI from 'openai';
+import { AppError, toClientMessage } from '@/lib/errors';
+import { BROWSER_USER_AGENT } from '@/lib/constants';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// Keeps a single pathological input from ballooning OpenAI cost/latency;
+// there's no auth or rate limiting in front of this action.
+const MAX_QUERY_LENGTH = 500;
 
 export interface SearchResultArticle {
   id: string;
@@ -19,6 +25,27 @@ export interface SearchResultArticle {
   relevanceScore?: number;
 }
 
+interface QiitaItem {
+  id: string;
+  title?: string;
+  url: string;
+  body?: string;
+  tags?: { name: string }[];
+  likes_count?: number;
+  created_at?: string;
+  user?: { id?: string };
+}
+
+interface ZennArticleItem {
+  id: string | number;
+  title?: string;
+  path: string;
+  liked_count?: number;
+  article_type?: string;
+  published_at?: string;
+  user?: { username?: string; name?: string };
+}
+
 export async function searchArticlesByQuery(naturalLanguageQuery: string): Promise<{
   success: boolean;
   articles?: SearchResultArticle[];
@@ -27,7 +54,11 @@ export async function searchArticlesByQuery(naturalLanguageQuery: string): Promi
 }> {
   try {
     if (!naturalLanguageQuery.trim()) {
-      throw new Error('検索キーワードまたは質問を入力してください');
+      throw new AppError('検索キーワードまたは質問を入力してください');
+    }
+
+    if (naturalLanguageQuery.length > MAX_QUERY_LENGTH) {
+      throw new AppError('検索キーワードが長すぎます');
     }
 
     // 1. Convert natural language prompt to optimized search query focused on usage/tutorials
@@ -64,8 +95,7 @@ export async function searchArticlesByQuery(naturalLanguageQuery: string): Promi
     )}&source=articles`;
 
     const headers = {
-      'User-Agent':
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'User-Agent': BROWSER_USER_AGENT,
     };
 
     const [qiitaRes, zennRes] = await Promise.allSettled([
@@ -78,9 +108,9 @@ export async function searchArticlesByQuery(naturalLanguageQuery: string): Promi
     // Parse Qiita items
     if (qiitaRes.status === 'fulfilled' && qiitaRes.value.ok) {
       try {
-        const items = await qiitaRes.value.json();
+        const items: unknown = await qiitaRes.value.json();
         if (Array.isArray(items)) {
-          items.forEach((item: any) => {
+          (items as QiitaItem[]).forEach((item) => {
             const bodyText = (item.body || '')
               .replace(/```[\s\S]*?```/g, '')
               .replace(/[#*`_~[\]()]/g, ' ')
@@ -94,7 +124,7 @@ export async function searchArticlesByQuery(naturalLanguageQuery: string): Promi
               url: item.url,
               snippet,
               source: 'Qiita',
-              tags: item.tags ? item.tags.map((t: any) => t.name) : [],
+              tags: item.tags ? item.tags.map((t) => t.name) : [],
               likesCount: item.likes_count || 0,
               createdAt: item.created_at ? item.created_at.split('T')[0] : '',
               author: item.user?.id || '匿名',
@@ -109,9 +139,10 @@ export async function searchArticlesByQuery(naturalLanguageQuery: string): Promi
     // Parse Zenn items
     if (zennRes.status === 'fulfilled' && zennRes.value.ok) {
       try {
-        const zennData = await zennRes.value.json();
-        if (Array.isArray(zennData.articles)) {
-          zennData.articles.forEach((item: any) => {
+        const zennData: unknown = await zennRes.value.json();
+        const articles = (zennData as { articles?: unknown })?.articles;
+        if (Array.isArray(articles)) {
+          (articles as ZennArticleItem[]).forEach((item) => {
             const title = item.title || '無題の記事';
             const url = `https://zenn.dev${item.path}`;
             const likes = item.liked_count || 0;
@@ -190,11 +221,11 @@ export async function searchArticlesByQuery(naturalLanguageQuery: string): Promi
       articles: articlesWithScore,
       refinedQuery,
     };
-  } catch (error: any) {
+  } catch (error) {
     console.error('searchArticlesByQuery Error:', error);
     return {
       success: false,
-      error: error.message || '検索処理中にエラーが発生しました',
+      error: toClientMessage(error, '検索処理中にエラーが発生しました'),
     };
   }
 }

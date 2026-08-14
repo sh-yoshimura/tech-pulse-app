@@ -6,7 +6,15 @@ export type Json =
     | { [key: string]: Json | undefined }
     | Json[];
 
+// @supabase/postgrest-js only infers real (non-`never`) Insert/Update
+// argument types when each table also declares `Relationships`, and the
+// schema declares `Views`/`Functions` — without these, `Schema` collapses
+// to `never` and every `.insert()`/`.update()` call silently requires a
+// type-widening cast (`as any`) to compile.
 export interface Database {
+    __InternalSupabase: {
+        PostgrestVersion: '12';
+    };
     public: {
         Tables: {
             articles: {
@@ -40,6 +48,7 @@ export interface Database {
                     created_at?: string;
                     updated_at?: string;
                 };
+                Relationships: [];
             };
             commands: {
                 Row: {
@@ -63,8 +72,19 @@ export interface Database {
                     description?: string;
                     created_at?: string;
                 };
+                Relationships: [
+                    {
+                        foreignKeyName: 'commands_article_id_fkey';
+                        columns: ['article_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'articles';
+                        referencedColumns: ['id'];
+                    },
+                ];
             };
         };
+        Views: Record<string, never>;
+        Functions: Record<string, never>;
     };
 }
 

@@ -2,6 +2,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { AppError, toClientMessage } from '@/lib/errors';
 
 export async function deleteArticles(ids: string[]): Promise<{
   success: boolean;
@@ -10,7 +11,7 @@ export async function deleteArticles(ids: string[]): Promise<{
 }> {
   try {
     if (!ids || ids.length === 0) {
-      throw new Error('削除する記事が選択されていません');
+      throw new AppError('削除する記事が選択されていません');
     }
 
     // Delete dependent commands first in case the DB has no cascading FK.
@@ -20,7 +21,8 @@ export async function deleteArticles(ids: string[]): Promise<{
       .in('article_id', ids);
 
     if (commandsError) {
-      throw new Error(`コマンド削除エラー: ${commandsError.message}`);
+      console.error('deleteArticles commands error:', commandsError);
+      throw new AppError('コマンドの削除に失敗しました');
     }
 
     const { error: articlesError, count } = await supabase
@@ -29,17 +31,18 @@ export async function deleteArticles(ids: string[]): Promise<{
       .in('id', ids);
 
     if (articlesError) {
-      throw new Error(`記事削除エラー: ${articlesError.message}`);
+      console.error('deleteArticles articles error:', articlesError);
+      throw new AppError('記事の削除に失敗しました');
     }
 
     revalidatePath('/');
 
     return { success: true, deletedCount: count ?? ids.length };
-  } catch (error: any) {
+  } catch (error) {
     console.error('deleteArticles Error:', error);
     return {
       success: false,
-      error: error.message || '削除処理中にエラーが発生しました',
+      error: toClientMessage(error, '削除処理中にエラーが発生しました'),
     };
   }
 }

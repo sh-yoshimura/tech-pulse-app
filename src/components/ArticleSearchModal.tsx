@@ -9,7 +9,6 @@ import { X, ExternalLink, ThumbsUp, Sparkles, Loader2, BookOpen } from 'lucide-r
 interface ArticleSearchModalProps {
   isOpen: boolean;
   onClose: () => void;
-  query: string;
   refinedQuery?: string;
   articles: SearchResultArticle[];
   onSelectArticle: (url: string) => Promise<void>;
@@ -18,7 +17,6 @@ interface ArticleSearchModalProps {
 export function ArticleSearchModal({
   isOpen,
   onClose,
-  query,
   refinedQuery,
   articles,
   onSelectArticle,

@@ -177,7 +177,6 @@ export function UrlInputForm() {
       <ArticleSearchModal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
-        query={searchQuery}
         refinedQuery={refinedQuery}
         articles={searchResults}
         onSelectArticle={handleSelectArticleFromModal}

@@ -6,10 +6,21 @@ import * as cheerio from 'cheerio';
 import OpenAI from 'openai';
 import { supabase } from '@/lib/supabase';
 import { revalidatePath } from 'next/cache';
+import { AppError, toClientMessage } from '@/lib/errors';
+import { assertPublicHttpUrl } from '@/lib/urlSafety';
+import { BROWSER_USER_AGENT } from '@/lib/constants';
 
 const openai = new OpenAI({
     apiKey: process.env.OPENAI_API_KEY,
 });
+
+interface ArticleAnalysisResult {
+    title?: string;
+    summary?: string[];
+    use_cases?: string[];
+    tags?: string[];
+    commands?: { command: string; description?: string }[];
+}
 
 function getArticlePrompt(title: string, bodyText: string): string {
     const filePath = path.join(process.cwd(), 'src/prompts/articleAnalysis.md');
@@ -23,18 +34,19 @@ function getArticlePrompt(title: string, bodyText: string): string {
 export async function addArticleByUrl(url: string) {
     try {
         if (!url) {
-            throw new Error('URLを入力してください');
+            throw new AppError('URLを入力してください');
         }
 
-        const response = await fetch(url, {
+        const safeUrl = await assertPublicHttpUrl(url);
+
+        const response = await fetch(safeUrl, {
             headers: {
-                'User-Agent':
-                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                'User-Agent': BROWSER_USER_AGENT,
             },
         });
 
         if (!response.ok) {
-            throw new Error('記事ページの取得に失敗しました');
+            throw new AppError('記事ページの取得に失敗しました');
         }
 
         const html = await response.text();
@@ -55,44 +67,49 @@ export async function addArticleByUrl(url: string) {
 
         const aiContent = aiResponse.choices[0]?.message?.content;
         if (!aiContent) {
-            throw new Error('AIによる解析結果の取得に失敗しました');
+            throw new AppError('AIによる解析結果の取得に失敗しました');
         }
 
-        const parsedData = JSON.parse(aiContent);
+        let parsedData: ArticleAnalysisResult;
+        try {
+            parsedData = JSON.parse(aiContent);
+        } catch (parseError) {
+            console.error('addArticleByUrl JSON parse error:', parseError, aiContent);
+            throw new AppError('AIによる解析結果の読み取りに失敗しました');
+        }
 
         const { data: article, error: articleError } = await supabase
             .from('articles')
             .insert({
-                url,
+                url: safeUrl.toString(),
                 title: parsedData.title || pageTitle,
                 summary: parsedData.summary || [],
                 use_cases: parsedData.use_cases || [],
                 tags: parsedData.tags || [],
-            } as any)
+            })
             .select()
             .single();
 
         if (articleError || !article) {
             if (articleError?.code === '23505') {
-                throw new Error('このURLの記事はすでに登録されています');
+                throw new AppError('このURLの記事はすでに登録されています');
             }
-            throw new Error(`DB保存エラー: ${articleError?.message || 'データ取得失敗'}`);
+            console.error('addArticleByUrl DB insert error:', articleError);
+            throw new AppError('記事の保存に失敗しました');
         }
 
-        const createdArticle = article as { id: string };
+        const createdArticle = article;
 
         if (parsedData.commands && parsedData.commands.length > 0) {
-            const commandsToInsert = parsedData.commands.map(
-                (cmd: { command: string; description: string }) => ({
-                    article_id: createdArticle.id,
-                    command: cmd.command,
-                    description: cmd.description || '',
-                })
-            );
+            const commandsToInsert = parsedData.commands.map((cmd) => ({
+                article_id: createdArticle.id,
+                command: cmd.command,
+                description: cmd.description || '',
+            }));
 
             const { error: commandError } = await supabase
                 .from('commands')
-                .insert(commandsToInsert as any);
+                .insert(commandsToInsert);
 
             if (commandError) {
                 console.error('コマンド保存エラー:', commandError.message);
@@ -102,8 +119,8 @@ export async function addArticleByUrl(url: string) {
         revalidatePath('/');
 
         return { success: true, articleId: createdArticle.id };
-    } catch (error: any) {
+    } catch (error) {
         console.error('addArticleByUrl Error:', error);
-        return { success: false, error: error.message || '処理中にエラーが発生しました' };
+        return { success: false, error: toClientMessage(error, '処理中にエラーが発生しました') };
     }
 }
