@@ -31,10 +31,13 @@ function getArticlePrompt(title: string, bodyText: string): string {
         .replace('{{BODY_TEXT}}', bodyText);
 }
 
-export async function addArticleByUrl(url: string) {
+export async function addArticleByUrl(url: string, folderId: string) {
     try {
         if (!url) {
             throw new AppError('URLを入力してください');
+        }
+        if (!folderId) {
+            throw new AppError('登録先のフォルダを選択してください');
         }
 
         const safeUrl = await assertPublicHttpUrl(url);
@@ -86,6 +89,7 @@ export async function addArticleByUrl(url: string) {
                 summary: parsedData.summary || [],
                 use_cases: parsedData.use_cases || [],
                 tags: parsedData.tags || [],
+                folder_id: folderId,
             })
             .select()
             .single();
@@ -93,6 +97,9 @@ export async function addArticleByUrl(url: string) {
         if (articleError || !article) {
             if (articleError?.code === '23505') {
                 throw new AppError('このURLの記事はすでに登録されています');
+            }
+            if (articleError?.code === '23503') {
+                throw new AppError('指定されたフォルダが見つかりません');
             }
             console.error('addArticleByUrl DB insert error:', articleError);
             throw new AppError('記事の保存に失敗しました');

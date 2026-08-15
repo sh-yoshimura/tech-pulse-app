@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { ArticleWithCommands } from '@/types/database';
+import { ArticleWithCommands, Folder } from '@/types/database';
 import { ArticleCard } from '@/components/ArticleCard';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -9,9 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Search, X, Tag, Filter, Loader2, Sparkles, Trash2, CheckSquare, Square } from 'lucide-react';
 import { expandSemanticQuery } from '@/app/actions/semanticSearch';
 import { deleteArticles } from '@/app/actions/deleteArticle';
+import { moveArticleToFolder } from '@/app/actions/folders';
 
 interface ArticleSearchListProps {
   articles: ArticleWithCommands[];
+  folders: Folder[];
 }
 
 function matchesTerm(searchableText: string, term: string): boolean {
@@ -24,7 +26,7 @@ function matchesTerm(searchableText: string, term: string): boolean {
   return searchableText.includes(term);
 }
 
-export function ArticleSearchList({ articles }: ArticleSearchListProps) {
+export function ArticleSearchList({ articles, folders }: ArticleSearchListProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [semanticKeywords, setSemanticKeywords] = useState<string[]>([]);
@@ -34,6 +36,8 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [movingIds, setMovingIds] = useState<Set<string>>(new Set());
+  const [moveError, setMoveError] = useState<string | null>(null);
 
   // Debounce natural language query expansion via AI (synonyms/related terms).
   // Query changes only ever originate from handleSearchChange below, which
@@ -206,6 +210,23 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
     runDelete(Array.from(selectedIds));
   };
 
+  const handleMoveToFolder = async (articleId: string, folderId: string) => {
+    setMoveError(null);
+    setMovingIds((prev) => new Set(prev).add(articleId));
+
+    const res = await moveArticleToFolder(articleId, folderId);
+
+    if (!res.success) {
+      setMoveError(res.error || '記事の移動に失敗しました');
+    }
+
+    setMovingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(articleId);
+      return next;
+    });
+  };
+
   const handleClearFilters = () => {
     handleSearchChange('');
     setSelectedTag(null);
@@ -372,6 +393,12 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
         </p>
       )}
 
+      {moveError && (
+        <p className="text-xs text-destructive font-medium bg-destructive/10 p-2.5 rounded-lg">
+          {moveError}
+        </p>
+      )}
+
       {/* Articles List or Empty State */}
       {filteredArticles.length === 0 ? (
         <div className="text-center py-12 px-4 border rounded-xl border-dashed bg-card/50">
@@ -404,6 +431,9 @@ export function ArticleSearchList({ articles }: ArticleSearchListProps) {
               onToggleSelect={handleToggleSelect}
               onDelete={() => handleDeleteOne(article.id, article.title)}
               isDeleting={deletingIds.has(article.id)}
+              folders={folders}
+              onMoveToFolder={handleMoveToFolder}
+              isMoving={movingIds.has(article.id)}
             />
           ))}
         </div>

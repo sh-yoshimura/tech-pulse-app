@@ -25,6 +25,7 @@ export interface Database {
                     summary: string[];
                     use_cases: string[];
                     tags: string[];
+                    folder_id: string;
                     created_at: string;
                     updated_at: string;
                 };
@@ -35,6 +36,7 @@ export interface Database {
                     summary?: string[];
                     use_cases?: string[];
                     tags?: string[];
+                    folder_id: string;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -45,6 +47,39 @@ export interface Database {
                     summary?: string[];
                     use_cases?: string[];
                     tags?: string[];
+                    folder_id?: string;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Relationships: [
+                    {
+                        foreignKeyName: 'articles_folder_id_fkey';
+                        columns: ['folder_id'];
+                        isOneToOne: false;
+                        referencedRelation: 'folders';
+                        referencedColumns: ['id'];
+                    },
+                ];
+            };
+            folders: {
+                Row: {
+                    id: string;
+                    name: string;
+                    is_default: boolean;
+                    created_at: string;
+                    updated_at: string;
+                };
+                Insert: {
+                    id?: string;
+                    name: string;
+                    is_default?: boolean;
+                    created_at?: string;
+                    updated_at?: string;
+                };
+                Update: {
+                    id?: string;
+                    name?: string;
+                    is_default?: boolean;
                     created_at?: string;
                     updated_at?: string;
                 };
@@ -91,3 +126,5 @@ export interface Database {
 export type ArticleWithCommands = Database['public']['Tables']['articles']['Row'] & {
     commands: Database['public']['Tables']['commands']['Row'][];
 };
+
+export type Folder = Database['public']['Tables']['folders']['Row'];

@@ -1,24 +1,47 @@
 import { supabase } from '@/lib/supabase';
-import { ArticleWithCommands } from '@/types/database';
+import { ArticleWithCommands, Folder } from '@/types/database';
 import { UrlInputForm } from '@/components/UrlInputForm';
 import { ArticleSearchList } from '@/components/ArticleSearchList';
+import { FolderMenu } from '@/components/FolderMenu';
 
 export const revalidate = 0;
 
-export default async function HomePage() {
-    const { data: articles, error } = await supabase
-        .from('articles')
-        .select(`
-      *,
-      commands (*)
-    `)
-        .order('created_at', { ascending: false });
+export default async function HomePage(props: PageProps<'/'>) {
+    const searchParams = await props.searchParams;
+    const requestedFolderId =
+        typeof searchParams.folder === 'string' ? searchParams.folder : undefined;
 
-    if (error) {
-        console.error('Data fetch error:', error);
+    const { data: folders, error: foldersError } = await supabase
+        .from('folders')
+        .select('*')
+        .order('is_default', { ascending: false })
+        .order('created_at', { ascending: true });
+
+    if (foldersError) {
+        console.error('Folders fetch error:', foldersError);
     }
 
-    const articleList = (articles as ArticleWithCommands[]) || [];
+    const folderList = (folders as Folder[]) || [];
+    const defaultFolder = folderList.find((f) => f.is_default) ?? folderList[0];
+    const currentFolder =
+        (requestedFolderId && folderList.find((f) => f.id === requestedFolderId)) ||
+        defaultFolder;
+    const currentFolderId = currentFolder?.id;
+
+    let articleList: ArticleWithCommands[] = [];
+    if (currentFolderId) {
+        const { data: articles, error } = await supabase
+            .from('articles')
+            .select(`*,commands (*)`)
+            .eq('folder_id', currentFolderId)
+            .order('created_at', { ascending: false });
+
+        if (error) {
+            console.error('Data fetch error:', error);
+        }
+
+        articleList = (articles as ArticleWithCommands[]) || [];
+    }
 
     return (
         <main className="min-h-screen bg-background py-10 px-4 max-w-4xl mx-auto">
@@ -32,9 +55,11 @@ export default async function HomePage() {
                 </p>
             </header>
             */}
-            <UrlInputForm />
+            <FolderMenu folders={folderList} currentFolderId={currentFolderId} />
 
-            <ArticleSearchList articles={articleList} />
+            <UrlInputForm folders={folderList} currentFolderId={currentFolderId} />
+
+            <ArticleSearchList articles={articleList} folders={folderList} />
         </main>
     );
 }

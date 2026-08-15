@@ -6,11 +6,28 @@ import { searchArticlesByQuery, SearchResultArticle } from '@/app/actions/search
 import { ArticleSearchModal } from '@/components/ArticleSearchModal';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Folder } from '@/types/database';
 import { Link2, Sparkles, Loader2, Search } from 'lucide-react';
 
-export function UrlInputForm() {
+interface UrlInputFormProps {
+  folders: Folder[];
+  currentFolderId?: string;
+}
+
+export function UrlInputForm({ folders, currentFolderId }: UrlInputFormProps) {
   const [mode, setMode] = useState<'url' | 'search'>('url');
-  
+
+  // Destination folder for either registration path below. Tracks
+  // currentFolderId (switched via FolderMenu) while still letting the user
+  // locally override the select — adjusted during render rather than in an
+  // effect, per React's guidance for resetting state when a prop changes.
+  const [folderId, setFolderId] = useState(currentFolderId ?? folders[0]?.id ?? '');
+  const [prevCurrentFolderId, setPrevCurrentFolderId] = useState(currentFolderId);
+  if (currentFolderId !== prevCurrentFolderId) {
+    setPrevCurrentFolderId(currentFolderId);
+    if (currentFolderId) setFolderId(currentFolderId);
+  }
+
   // URL Direct Registration State
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -27,11 +44,15 @@ export function UrlInputForm() {
   const handleUrlSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!url) return;
+    if (!folderId) {
+      setError('登録先のフォルダを選択してください');
+      return;
+    }
 
     setLoading(true);
     setError(null);
 
-    const result = await addArticleByUrl(url);
+    const result = await addArticleByUrl(url, folderId);
 
     if (!result.success) {
       setError(result.error || '登録に失敗しました');
@@ -66,7 +87,13 @@ export function UrlInputForm() {
   // Callback when user selects an article in modal
   const handleSelectArticleFromModal = async (selectedUrl: string) => {
     setError(null);
-    const result = await addArticleByUrl(selectedUrl);
+    if (!folderId) {
+      const message = '登録先のフォルダを選択してください';
+      setError(message);
+      throw new Error(message);
+    }
+
+    const result = await addArticleByUrl(selectedUrl, folderId);
 
     if (!result.success) {
       setError(result.error || '登録に失敗しました');
@@ -81,6 +108,26 @@ export function UrlInputForm() {
   return (
     <>
       <div className="w-full max-w-2xl mx-auto my-6 p-4 sm:p-5 border rounded-2xl shadow-sm bg-card space-y-4">
+        {/* Destination Folder — applies to both registration modes below */}
+        <div className="flex items-center gap-2">
+          <label htmlFor="folder-select" className="text-xs font-medium text-muted-foreground shrink-0">
+            登録先フォルダ
+          </label>
+          <select
+            id="folder-select"
+            value={folderId}
+            onChange={(e) => setFolderId(e.target.value)}
+            disabled={folders.length === 0}
+            className="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-input/50 disabled:opacity-50 dark:bg-input/30"
+          >
+            {folders.map((folder) => (
+              <option key={folder.id} value={folder.id}>
+                {folder.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Mode Switcher Tabs */}
         <div className="flex border-b border-border pb-3 gap-2">
           <button

@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { ArticleWithCommands } from '@/types/database';
+import { ArticleWithCommands, Folder } from '@/types/database';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { CheckSquare, Square, Trash2, Loader2, Globe } from 'lucide-react';
+import { CheckSquare, Square, Trash2, Loader2, Globe, FolderInput } from 'lucide-react';
 
 interface ArticleCardProps {
   article: ArticleWithCommands;
@@ -14,6 +14,9 @@ interface ArticleCardProps {
   onToggleSelect?: (id: string) => void;
   onDelete?: (id: string) => void;
   isDeleting?: boolean;
+  folders?: Folder[];
+  onMoveToFolder?: (articleId: string, folderId: string) => void;
+  isMoving?: boolean;
 }
 
 function SiteFavicon({ url }: { url: string }) {
@@ -55,6 +58,9 @@ export function ArticleCard({
   onToggleSelect,
   onDelete,
   isDeleting = false,
+  folders,
+  onMoveToFolder,
+  isMoving = false,
 }: ArticleCardProps) {
   return (
     <Card
@@ -91,21 +97,41 @@ export function ArticleCard({
               </CardTitle>
             </a>
           </div>
-          {onDelete && (
-            <button
-              type="button"
-              onClick={() => onDelete(article.id)}
-              disabled={isDeleting}
-              aria-label="この記事を削除"
-              className="text-muted-foreground hover:text-destructive transition-colors shrink-0 p-1 rounded-md disabled:cursor-not-allowed"
-            >
-              {isDeleting ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-            </button>
-          )}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {folders && onMoveToFolder && (
+              <div className="flex items-center gap-1">
+                <FolderInput className="w-3.5 h-3.5 text-muted-foreground" />
+                <select
+                  value={article.folder_id}
+                  onChange={(e) => onMoveToFolder(article.id, e.target.value)}
+                  disabled={isMoving}
+                  aria-label="フォルダを移動"
+                  className="h-7 text-xs rounded-md border border-input bg-transparent px-1.5 py-0.5 transition-colors outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:bg-input/30"
+                >
+                  {folders.map((folder) => (
+                    <option key={folder.id} value={folder.id}>
+                      {folder.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(article.id)}
+                disabled={isDeleting}
+                aria-label="この記事を削除"
+                className="text-muted-foreground hover:text-destructive transition-colors shrink-0 p-1 rounded-md disabled:cursor-not-allowed"
+              >
+                {isDeleting ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Trash2 className="w-4 h-4" />
+                )}
+              </button>
+            )}
+          </div>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-2">
           {article.tags.map((tag, idx) => {
