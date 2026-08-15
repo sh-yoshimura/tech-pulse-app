@@ -117,11 +117,11 @@ export function FolderMenu({ folders, currentFolderId }: FolderMenuProps) {
 
       {isOpen && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200"
           onClick={close}
         >
           <div
-            className="relative w-full max-w-md max-h-[85vh] bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden"
+            className="absolute inset-y-0 left-0 w-full max-w-xs bg-card border-r shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-left duration-300"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 sm:p-5 border-b bg-muted/30 flex items-center justify-between">
